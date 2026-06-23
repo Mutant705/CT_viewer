@@ -118,25 +118,33 @@ class RingBuffer:
         if self.slots[new_head] is None and self.z_index[new_head] is None:
             return False # Boundary
 
+        # 1. The OLD flush slot is the one currently empty; it gets the new slice
+        old_flush_pos = (self.head + FLUSH_OFFSET) % RING_SIZE
+        
+        # 2. Update head pointer
         self.head = new_head
         
-        # Identify flush slot and what Z it should now hold
-        flush_pos = (self.head + FLUSH_OFFSET) % RING_SIZE
+        # 3. The NEW flush slot is the one that needs to be cleared
+        new_flush_pos = (self.head + FLUSH_OFFSET) % RING_SIZE
+        
         head_z = self.z_index[self.head]
-
         if head_z is None:
-            self.slots[flush_pos]   = None
-            self.z_index[flush_pos] = None
-            return True
+            return False
 
+        # Calculate the Z-index for the newly exposed edge of the window
         new_z = head_z + direction * HALF_WINDOW
         n     = volume.shape[0]
 
+        # Populate the old flush position with the new slice
         if 0 <= new_z < n:
-            self.slots[flush_pos]   = render_slice(volume, new_z, canvas_h, canvas_w)
-            self.z_index[flush_pos] = new_z
+            self.slots[old_flush_pos]   = render_slice(volume, new_z, canvas_h, canvas_w)
+            self.z_index[old_flush_pos] = new_z
         else:
-            self.slots[flush_pos]   = None
-            self.z_index[flush_pos] = None
+            self.slots[old_flush_pos]   = None
+            self.z_index[old_flush_pos] = None
+
+        # Clear out the new flush position to maintain the gap
+        self.slots[new_flush_pos]   = None
+        self.z_index[new_flush_pos] = None
 
         return True
